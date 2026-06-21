@@ -12,6 +12,10 @@ __pycache__/
 data/*.db3
 data/**/metadata.yaml
 
+# Claude Code: commit the shared permission policy (settings.json),
+# but keep personal/local overrides out of the repo
+.claude/settings.local.json
+
 # OS / editor noise
 .DS_Store
 .vscode/
