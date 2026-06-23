@@ -1,10 +1,11 @@
 """Structural parser for rosbag2 bags.
 
 Opens ANY rosbag2 bag and reports its layout: topics, message types, per-topic
-message counts, total duration, and start/end timestamps. Also extracts the
-altitude time series from any PoseStamped topic to set up M2's altitude-drop
-detector. Structure reporting is type-agnostic (works on arbitrary bags);
-only altitude extraction deserializes messages, and only for PoseStamped topics.
+message counts, total duration, and start/end timestamps. Also extracts two
+signal time series for the detectors: altitude from any PoseStamped topic (M2)
+and linear-acceleration magnitude from any Imu topic (M4). Structure reporting
+is type-agnostic (works on arbitrary bags); only signal extraction deserializes
+messages, and only for the PoseStamped / Imu topics it recognises.
 
 Verified against rosbags 0.11.3 Reader API (connections[].topic/.msgtype/.msgcount,
 reader.duration/.start_time/.end_time in nanoseconds, messages() yields
@@ -13,6 +14,7 @@ reader.duration/.start_time/.end_time in nanoseconds, messages() yields
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from rosbags.rosbag2 import Reader
 from rosbags.typesys import Stores, get_typestore
 
 POSE_TYPE = "geometry_msgs/msg/PoseStamped"
+IMU_TYPE = "sensor_msgs/msg/Imu"
 
 
 @dataclass
@@ -39,6 +42,8 @@ class BagStructure:
     end_time_ns: int
     # (time_since_start_s, altitude_m) sampled from PoseStamped topic(s), time-sorted.
     altitude_series: list[tuple[float, float]] = field(default_factory=list)
+    # (time_since_start_s, |linear_acceleration| m/s^2) from Imu topic(s), time-sorted.
+    imu_accel_series: list[tuple[float, float]] = field(default_factory=list)
 
 
 def parse_bag(path: str | Path, typestore=None) -> BagStructure:
@@ -57,13 +62,23 @@ def parse_bag(path: str | Path, typestore=None) -> BagStructure:
 
         start_ns = reader.start_time
         altitude: list[tuple[float, float]] = []
-        pose_conns = [c for c in reader.connections if c.msgtype == POSE_TYPE]
-        if pose_conns:
-            for connection, timestamp, rawdata in reader.messages(connections=pose_conns):
+        imu_accel: list[tuple[float, float]] = []
+        # One pass over the topics we extract signals from, dispatched by type.
+        signal_conns = [
+            c for c in reader.connections if c.msgtype in (POSE_TYPE, IMU_TYPE)
+        ]
+        if signal_conns:
+            for connection, timestamp, rawdata in reader.messages(connections=signal_conns):
                 msg = typestore.deserialize_cdr(rawdata, connection.msgtype)
                 t_rel = (timestamp - start_ns) / 1e9
-                altitude.append((t_rel, float(msg.pose.position.z)))
+                if connection.msgtype == POSE_TYPE:
+                    altitude.append((t_rel, float(msg.pose.position.z)))
+                else:  # IMU_TYPE
+                    a = msg.linear_acceleration
+                    mag = math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z)
+                    imu_accel.append((t_rel, mag))
             altitude.sort(key=lambda p: p[0])
+            imu_accel.sort(key=lambda p: p[0])
 
         return BagStructure(
             path=str(path),
@@ -73,6 +88,7 @@ def parse_bag(path: str | Path, typestore=None) -> BagStructure:
             start_time_ns=reader.start_time,
             end_time_ns=reader.end_time,
             altitude_series=altitude,
+            imu_accel_series=imu_accel,
         )
     finally:
         reader.close()
@@ -93,6 +109,12 @@ def format_summary(structure: BagStructure) -> str:
         lines.append(
             f"Altitude (z): min {min(zs):.1f} m, max {max(zs):.1f} m, "
             f"{len(zs)} samples  [feeds M2 altitude-drop detector]"
+        )
+    if structure.imu_accel_series:
+        accs = [a for _, a in structure.imu_accel_series]
+        lines.append(
+            f"IMU |accel|: min {min(accs):.1f}, max {max(accs):.1f} m/s^2, "
+            f"{len(accs)} samples  [feeds M4 IMU-spike detector]"
         )
     return "\n".join(lines)
 

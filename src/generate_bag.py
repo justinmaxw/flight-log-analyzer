@@ -2,7 +2,8 @@
 
 Milestone 1: produce a deterministic synthetic flight log containing an
 *injected altitude-drop anomaly*, so later milestones have a known ground truth
-to detect against. Detection itself is NOT done here (that is M2/M4).
+to detect against. Milestone 4 adds a second injected anomaly -- a brief IMU
+linear-acceleration jolt near t=45 s. Detection itself is NOT done here (M2/M4).
 
 Schema (documented standard ROS2 types — see README "Decisions to sanity-check"):
   /flight/pose : geometry_msgs/msg/PoseStamped  (altitude = pose.position.z, meters)
@@ -36,6 +37,15 @@ _ALT_KEYFRAMES = [
     (40.0, 45.0),   # partial recovery
     (60.0, 45.0),   # cruise to end
 ]
+
+# Injected IMU anomaly (M4 ground truth): a brief linear-acceleration jolt on +x,
+# centred at t=45 s (well clear of the t~30 s altitude drop so the two findings
+# stay distinct). At 50 Hz the +/-0.05 s window is ~5 samples. Baseline accel
+# magnitude is ~9.81 m/s^2 (gravity); the jolt lifts it to ~sqrt(40^2+9.81^2)
+# ~= 41 m/s^2, a ~31 m/s^2 deviation -- far above the detector's noise floor.
+_IMU_SPIKE_T = 45.0           # centre time of the jolt (s)
+_IMU_SPIKE_HALFWIDTH = 0.05   # +/- window around the centre (s)
+_IMU_SPIKE_ACCEL = 40.0       # added acceleration on the x axis (m/s^2)
 
 
 def _altitude(t: float) -> float:
@@ -99,11 +109,15 @@ def generate_bag(
             ),
         )
 
-    def imu_msg(ns: int):
+    def imu_msg(ns: int, t: float):
         # Raw IMU: gravity on +z, small noise. orientation_covariance[0]=-1 per
-        # REP-145 meaning "no orientation estimate". No IMU spike injected (that is M4).
+        # REP-145 meaning "no orientation estimate". A brief +x acceleration jolt
+        # is injected near t=45 s as the M4 IMU-spike ground truth (see constants).
         ocov = np.zeros(9, dtype=np.float64)
         ocov[0] = -1.0
+        ax = rng.normal(0, 0.10)
+        if abs(t - _IMU_SPIKE_T) <= _IMU_SPIKE_HALFWIDTH:
+            ax += _IMU_SPIKE_ACCEL
         return T(IMU_TYPE)(
             header=header(ns, "imu_link"),
             orientation=T("geometry_msgs/msg/Quaternion")(x=0.0, y=0.0, z=0.0, w=1.0),
@@ -113,7 +127,7 @@ def generate_bag(
             ),
             angular_velocity_covariance=np.zeros(9, dtype=np.float64),
             linear_acceleration=T("geometry_msgs/msg/Vector3")(
-                x=rng.normal(0, 0.10), y=rng.normal(0, 0.10), z=9.81 + rng.normal(0, 0.10)
+                x=ax, y=rng.normal(0, 0.10), z=9.81 + rng.normal(0, 0.10)
             ),
             linear_acceleration_covariance=np.zeros(9, dtype=np.float64),
         )
@@ -129,7 +143,7 @@ def generate_bag(
     for i in range(n_imu):
         t = i / imu_hz
         ns = int(round(t * 1e9))
-        events.append((ns, IMU_TOPIC, imu_msg(ns)))
+        events.append((ns, IMU_TOPIC, imu_msg(ns, t)))
     events.sort(key=lambda e: e[0])
 
     writer = Writer(out, version=9)
