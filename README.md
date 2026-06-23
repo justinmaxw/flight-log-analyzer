@@ -15,13 +15,14 @@ library — **no full ROS2 install required**.
 | **M2** | Altitude-drop detector | ✅ done |
 | **M3** | Plain-language report generator | ✅ done |
 | **M4** | IMU-spike detector + run any bag | ✅ done |
-| M5 | *(stretch)* Simple UI / CV angle | |
+| **M5** | *(stretch)* Flight-timeline plot (matplotlib) | ✅ done |
 
 ## Quick start
 
 ```bash
 python3 -m venv .venv
 ./.venv/bin/python -m pip install rosbags pytest
+./.venv/bin/python -m pip install matplotlib   # optional, only for --plot (M5)
 
 # One command — analyze any rosbag2 bag and print the incident report:
 ./.venv/bin/python src/main.py path/to/bag_dir
@@ -29,11 +30,15 @@ python3 -m venv .venv
 # No path → generate the synthetic demo bag, then analyze it:
 ./.venv/bin/python src/main.py
 
+# Also save a flight-timeline PNG (altitude + IMU panels, anomalies annotated):
+./.venv/bin/python src/main.py path/to/bag_dir --plot flight_timeline.png
+
 # Individual stages also run standalone on any bag:
 ./.venv/bin/python src/parser.py       path/to/bag_dir   # structure
 ./.venv/bin/python src/detector.py     path/to/bag_dir --min-drop 5 --min-rate 2
 ./.venv/bin/python src/imu_detector.py path/to/bag_dir --min-dev 5
 ./.venv/bin/python src/report.py       path/to/bag_dir   # full report
+./.venv/bin/python src/plot.py         path/to/bag_dir -o flight_timeline.png
 
 # Tests:
 ./.venv/bin/python -m pytest -q
@@ -93,10 +98,14 @@ src/
   report.py         Plain-language incident report: folds structure + both event
                     lists into overview / flight summary / findings / assessment,
                     with a severity grade per finding. Pure formatting, stdlib only.
-  main.py           One command: analyze any bag (or generate the demo) end-to-end.
-tests/              pytest (31): bag contents + parser structure + injected
+  plot.py           Flight-timeline PNG (matplotlib, headless Agg): altitude + IMU
+                    panels with anomalies shaded/marked by severity. Optional dep.
+  main.py           One command: analyze any bag (or generate the demo) end-to-end,
+                    optionally writing a timeline PNG with --plot.
+tests/              pytest (33): bag contents + parser structure + injected
                     drop/spike checks + both detectors (find the anomalies, reject
-                    benign signals) + report (sections, severity) + one-command run.
+                    benign signals) + report (sections, severity) + one-command run
+                    + plot (valid PNG, headless, empty-signal edge case).
 ```
 
 The parser separates **structure** (works on any bag, no deserialization) from
@@ -151,6 +160,18 @@ an altitude drop is `HIGH` (≥ 10 m **or** ≥ 5 m/s), `MODERATE` (≥ 5 m or �
 else `LOW`; an IMU spike is `HIGH` (≥ 20 m/s² ≈ 2 g above baseline), `MODERATE`
 (≥ 5 m/s²), else `LOW`. First-pass guesses for a small UAV, chosen so both
 synthetic anomalies read as `HIGH`. Tune per airframe.
+
+### How the flight-timeline plot works (M5, optional)
+
+`plot.py` (the project's only non-stdlib dependency, **matplotlib**) renders a
+two-panel PNG: altitude and IMU acceleration on a shared time axis. Altitude
+drops are shaded peak→trough; IMU spikes are marked at their peak; both are
+coloured by the same severity grade as the text report, so the picture and the
+report always agree. It uses matplotlib's headless **`Agg`** backend, so it
+renders with no display (safe in a CLI or CI) and is exercised by a test that
+checks the output is a real, non-trivial PNG. Enable it with `main.py --plot
+out.png`; without the flag matplotlib is never imported, so the core tool stays
+stdlib-only.
 
 ## Synthetic bag schema — "Decisions to sanity-check"
 
