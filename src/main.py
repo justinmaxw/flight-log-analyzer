@@ -12,9 +12,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from detector import detect_altitude_drops, format_drops  # noqa: E402
+from detector import detect_altitude_drops  # noqa: E402
 from generate_bag import generate_bag  # noqa: E402
-from parser import format_summary, parse_bag  # noqa: E402
+from parser import parse_bag  # noqa: E402
+from report import build_report  # noqa: E402
 
 
 def main() -> None:
@@ -22,13 +23,9 @@ def main() -> None:
     bag_path = generate_bag()
     print(f"Wrote -> {bag_path}\n")
 
-    print("== Structural parse ==")
     structure = parse_bag(bag_path)
-    print(format_summary(structure))
-
-    print("\n== Altitude-drop detection ==")
     events = detect_altitude_drops(structure.altitude_series)
-    print(format_drops(events))
+    print(build_report(structure, events))
 
 
 if __name__ == "__main__":
