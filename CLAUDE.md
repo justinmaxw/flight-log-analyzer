@@ -27,21 +27,27 @@ field/autonomy roles at **Anduril, Shield AI, Skydio**, and a deliberate
 - **Milestone build** with checkpoints.
 - **Single agent looping** (Rung 1; multi-agent is a later rung).
 
-## Milestones
-1. Synthetic bag w/ injected anomaly + structural parser.
-2. Altitude-drop detector.
-3. Plain-language report generator.
-4. IMU-spike detector + one command to run any bag.
-5. *(stretch)* Simple UI or CV angle.
+## Milestones — ALL COMPLETE (as of 2026-06-24)
+1. ✅ Synthetic bag w/ injected anomaly + structural parser. — commit `13705cc`
+2. ✅ Altitude-drop detector. — commit `9d0e692`
+3. ✅ Plain-language report generator. — commit `e9226bb`
+4. ✅ IMU-spike detector + one command to run any bag. — commit `e1165e6`
+5. ✅ *(stretch)* Flight-timeline plot (matplotlib, optional `--plot`). — commit `01d0f40`
+
+All five milestones are built, committed, and covered by tests under `tests/`.
+No milestone is currently open. The next unit of work needs a new kickoff
+prompt or an explicit "begin Phase B"; until then, default to Phase A.
 
 ---
 
 ## Operating modes — always state which one you are in
 
 **PHASE A — INTERACTIVE SETUP (human-paced).** One stage at a time; STOP for
-confirmation before the next; end each with "Confirm to proceed to <next>." Setup
-stages A1–A2 (inventory, install, venv, rosbags, git) are **complete**. Remaining:
-A4 permissions config, A5 Milestone-1 kickoff prompt, A6 Remote Control walkthrough.
+confirmation before the next; end each with "Confirm to proceed to <next>." All
+setup stages are **complete**: A1–A2 (inventory, install, venv, rosbags, git),
+A4 permissions config (`.claude/settings.json`), A5 Milestone-1 kickoff, and A6
+Remote Control walkthrough. Phase A is the default resting mode between milestones;
+re-enter it for any new human-paced decision.
 
 **PHASE B — AUTONOMOUS EXECUTION.** Triggered ONLY when Justin pastes a kickoff
 prompt or says "begin Phase B." On entry, restate: *"Phase B: I will loop
@@ -66,9 +72,10 @@ If a choice is merely uncertain, proceed with a documented default and surface i
 Otherwise keep looping; do not interrupt for minor steps.
 
 **Expected-by-design:** package installs are on the hard-deny list, so any milestone
-needing a NEW library (likely **M3** report formatting, **M5** UI/CV stretch) WILL
-hit an escalation. That is correct behavior, not a malfunction — stop, name the
-package and why, and wait for "go."
+needing a NEW library WILL hit an escalation. That is correct behavior, not a
+malfunction — stop, name the package and why, and wait for "go." (This already
+happened once: **M5** required `matplotlib`, which was escalated, approved, and
+installed. Future new-library needs follow the same path.)
 
 ## Anti-fabrication
 Justin cannot verify robotics claims. Label every nontrivial one
