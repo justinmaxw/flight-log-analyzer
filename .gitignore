@@ -20,3 +20,6 @@ data/*
 .DS_Store
 .vscode/
 .idea/
+
+# Experiment split into its own repo: https://github.com/justinmaxw/gps-ekf-rca-experiment
+/Experiment/
